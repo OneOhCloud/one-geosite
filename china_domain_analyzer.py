@@ -1,5 +1,6 @@
 """优化后的Python脚本 - 改进日志输出以清晰展示逻辑关系"""
 
+import json
 import logging
 import os
 
@@ -21,21 +22,41 @@ logger = logging.getLogger(__name__)
 
 # 预设的域名后缀列表
 ignore_domain_suffix_list = [
+    "adobe.com",
+    "akamaihd.net",
+    "akamaized.net",
+    "amazon.com",
+    "amazonaws.com",
+    "appsflyersdk.com",
     "baidu.com",
     "casalemedia.com",
+    "cloudfront.net",
+    "doubleclick.net",
     "fbcdn.net",
     "fbcdn.net",
+    "fc2.com",
+    "gcp.gvt2.com",
     "google.com",
     "googlesyndication.com",
-    "googlesyndication.com",
+    "googlevideo.com",
+    "gstatic.com",
+    "gvt1.com",
     "microsoft.com",
     "nesnode.com",
+    "openai.com",
     "provider",
     "push.apple.com",
     "qq.com",
     "sensic.net",
+    "steamserver.net",
+    "tiktokcdn.com",
     "tiktokv.com",
     "tiktokv.us",
+    "twitter.com",
+    "xhcdn.com",
+    "xhscdn.com",
+    "xn--ngstr-lra8j.com",
+    "zoom.us",
 ]
 
 
@@ -90,6 +111,9 @@ def load_domains():
                 continue
 
             if domain.count(".") < 1:
+                continue
+
+            if ":" in domain or "[" in domain:
                 continue
 
             data.append(domain)
@@ -166,6 +190,40 @@ def get_china_domain_suffix(domain):
     return finally_domain
 
 
+def get_domain_list(domain_list: list[str]):
+    domain_suffix = set()
+    for domain in domain_list:
+        # 获取域名后缀
+        if domain.count(".") > 1:
+            # 取最后两级域名
+            domain_suffix.add(".".join(domain.split(".")[-2:]))
+
+    summary = {}
+    for domain_suffix_item in domain_suffix:
+        if domain_suffix_item not in summary:
+            summary[domain_suffix_item] = 0
+
+        for domain in domain_list:
+            if domain.endswith(domain_suffix_item):
+                summary[domain_suffix_item] += 1
+    ready_delete_domain_list = []
+    data = []
+
+    for item, count in summary.items():
+        if count >= 2:
+            for domain in domain_list:
+                if domain.endswith(item):
+                    ready_delete_domain_list.append(domain)
+            data.append(item)
+
+    for domain in domain_list:
+        if domain in ready_delete_domain_list:
+            continue
+        data.append(domain)
+
+    return data
+
+
 def main():
     """主函数"""
     domain_list = load_domains()
@@ -174,7 +232,9 @@ def main():
         return
     logger.info("开始处理域名列表")
     finally_domain_list = set()
-    for domain in domain_list:
+    total_domains = len(domain_list)
+    for index, domain in enumerate(domain_list, start=1):
+        logger.info("正在处理域名 [%d/%d]", index, total_domains)
         if is_china_domain(domain):
             # 获取中国域名后缀
             china_domain_suffix = get_china_domain_suffix(domain)
@@ -184,6 +244,21 @@ def main():
     with open("final_domain_suffix.txt", "w", encoding="utf-8") as f:
         for domain in finally_domain_list:
             f.write(domain + "\n")
+
+    finally_domain_list = get_domain_list(finally_domain_list)
+
+    # data = json.loads("rules.json")
+    with open("rules.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    # 添加中国域名后缀到规则中
+    data["domain_suffix"] = data["domain_suffix"] + list(finally_domain_list)
+
+    # 排序
+    data["domain_suffix"] = sorted(set(data["domain_suffix"]))
+    # 保存规则
+    with open("rules.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    logger.info("域名处理完成，结果已保存到 final_domain_suffix.txt 和 rules.json")
 
 
 if __name__ == "__main__":
