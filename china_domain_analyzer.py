@@ -22,7 +22,10 @@ logger = logging.getLogger(__name__)
 
 # 预设的域名后缀列表
 ignore_domain_suffix_list = [
-    "facebook.com",
+    "hypercachenode.com",
+    "ms.vk.com",
+    "sentry.io",
+    "cedexis-radar.net",
     "adobe.com",
     "adsco.re",
     "akamaihd.net",
@@ -34,6 +37,7 @@ ignore_domain_suffix_list = [
     "casalemedia.com",
     "cloudfront.net",
     "doubleclick.net",
+    "facebook.com",
     "fbcdn.net",
     "fbcdn.net",
     "fc2.com",
@@ -44,6 +48,7 @@ ignore_domain_suffix_list = [
     "googlevideo.com",
     "gstatic.com",
     "gvt1.com",
+    "jp",
     "microsoft.com",
     "nesnode.com",
     "openai.com",
@@ -63,8 +68,8 @@ ignore_domain_suffix_list = [
 ]
 
 with open("rules.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
-    ignore_domain_suffix_list += data["domain_suffix"]
+    rules_data = json.load(f)
+    ignore_domain_suffix_list += rules_data["domain_suffix"]
 
 
 def load_cache_file(cache_file: str):
@@ -75,7 +80,7 @@ def load_cache_file(cache_file: str):
 
     try:
         with open(cache_file, "r", encoding="utf-8") as f:
-            domains = {line.strip() for line in f if line.strip()}
+            domains = {line.strip().lower() for line in f if line.strip()}
         logger.info("加载缓存文件[%s]成功", cache_file)
         return set(domains)
     except Exception as e:  # pylint: disable=W0718
@@ -106,7 +111,7 @@ def save_cache_file(domain: str, is_cn: bool):
 
 def load_domains():
     """读取未处理的域名列表"""
-    data = []
+    _data = []
     try:
         with open("domains.txt", "r", encoding="utf-8") as f:
             domains = [line.strip() for line in f if line.strip()]
@@ -123,9 +128,9 @@ def load_domains():
             if ":" in domain or "[" in domain:
                 continue
 
-            data.append(domain)
+            _data.append(domain)
 
-        return data
+        return _data
 
     except Exception as e:  # pylint: disable=W0718
         logger.error("加载domains.txt失败: %s", str(e))
