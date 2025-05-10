@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # 预设的域名后缀列表
 ignore_domain_suffix_list = [
+    "facebook.com",
     "adobe.com",
     "adsco.re",
     "akamaihd.net",
