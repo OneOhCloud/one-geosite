@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # 预设的域名后缀列表
 ignore_domain_suffix_list = [
     "adobe.com",
+    "adsco.re",
     "akamaihd.net",
     "akamaized.net",
     "amazon.com",
@@ -37,6 +38,7 @@ ignore_domain_suffix_list = [
     "fc2.com",
     "gcp.gvt2.com",
     "google.com",
+    "googleapis.com",
     "googlesyndication.com",
     "googlevideo.com",
     "gstatic.com",
@@ -58,6 +60,10 @@ ignore_domain_suffix_list = [
     "xn--ngstr-lra8j.com",
     "zoom.us",
 ]
+
+with open("rules.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+    ignore_domain_suffix_list += data["domain_suffix"]
 
 
 def load_cache_file(cache_file: str):
