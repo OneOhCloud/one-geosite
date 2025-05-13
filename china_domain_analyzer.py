@@ -300,12 +300,7 @@ def main():
 
     # 排序
     data["domain_suffix"] = sorted(set(data["domain_suffix"]))
-    # 去掉以 cn 结尾的域名后缀，处理字符长度大于3的域名后缀
-    data["domain_suffix"] = [
-        suffix
-        for suffix in data["domain_suffix"]
-        if not (suffix.endswith("cn") and len(suffix) > 3)
-    ]
+
     # 保存规则
     with open("rules.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
