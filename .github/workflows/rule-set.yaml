@@ -1,0 +1,60 @@
+name: Update Rules
+
+on:
+  push:
+    paths:
+      - 'rules.json'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 16 * * *'
+
+# 添加权限配置
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Run script
+        run: python main.py
+        
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+      - name: Update rules branch
+        run: |
+          # 删除远程和本地的 rules 分支
+          git push origin --delete rules || true
+          git branch -D rules || true
+          
+          # 创建全新的 rules 分支（无历史记录）
+          git checkout --orphan rules
+          git rm -rf .
+          
+          # 只复制 output 目录中的文件，不包括目录结构
+          cp output/* .
+          rm -rf output tmp
+          git add .
+          git commit -m "Update rules $(date +%Y-%m-%d)"
+          
+          # 使用 GITHUB_TOKEN 进行推送
+          git push -f "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" rules
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
