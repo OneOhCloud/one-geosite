@@ -13,12 +13,27 @@
         "66.197.128.0/17"
     ],
     "domain": [
+        "captive.apple.com",
         "connectivitycheck.android.com",
+        "connectivitycheck.gstatic.com",
+        "d2uzsrnmmf6tds.cloudfront.net",
         "detectportal.firefox.com",
+        "detectportal.firefox.com",
+        "msftncsi.com",
         "nmcheck.gnome.org",
         "router.asus.com",
+        "spectrum.s3.amazonaws.com",
         "wiportal.wiwide.com",
-        "www.miwifi.com"
+        "www.airport.us",
+        "www.androidbak.net",
+        "www.apple.com",
+        "www.appleiphonecell.com",
+        "www.gstatic.com",
+        "www.ibook.info",
+        "www.itools.info",
+        "www.miwifi.com",
+        "www.msftconnecttest.com",
+        "www.thinkdifferent.us"
     ],
     "domain_suffix": [
         "007swz.com",
