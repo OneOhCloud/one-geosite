@@ -192,7 +192,7 @@ def get_china_domain_suffix(domain):
     return finally_domain
 
 
-def get_domain_list(domain_list: list[str]):
+def get_domain_list(domain_list: set[str]):
     """获取域名列表"""
     domain_suffix = set()
     for domain in domain_list:
