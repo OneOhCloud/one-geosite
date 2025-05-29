@@ -12,6 +12,7 @@ skip_count = 0
 
 load_dotenv()
 
+print("测试API连接: ", f"{os.getenv("api_url")}/is-china-domain?domain=www.baidu.com")
 gTLD = [
     "cn",
     "com",
