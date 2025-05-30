@@ -3,19 +3,17 @@
 import asyncio
 import json
 import logging
-import os
-from contextlib import asynccontextmanager
 
-import aiohttp
 from dotenv import load_dotenv
 
 from helper import sort_rule_file
+from utils import check_domain
 
 # pylint: disable=c0103
 skip_count = 0
 
 load_dotenv()
-print("测试API连接: ", f"{os.getenv('api_url')}/is-china-domain?domain=www.baidu.com")
+
 gTLD = [
     "cn",
     "com",
@@ -46,49 +44,16 @@ with open("rules.json", "r", encoding="utf-8") as f:
     ignore_domain_suffix_list += rules_data["domain_suffix"]
 
 
-def load_cache_file(cache_file: str):
-    """加载缓存文件"""
-    if not os.path.exists(cache_file):
-        logger.warning("缓存文件[%s]不存在", cache_file)
-        return set()
-
-    try:
-        # pylint: disable=W0621
-        with open(cache_file, "r", encoding="utf-8") as f:
-            domains = {line.strip().lower() for line in f if line.strip()}
-        logger.info("加载缓存文件[%s]成功", cache_file)
-        return set(domains)
-    except Exception as e:  # pylint: disable=W0718
-        logger.error("加载缓存文件[%s]失败: %s", cache_file, str(e))
-        return set()
+cn_domain = set()
+non_cn_domain = set()
 
 
-cn_domain = load_cache_file("cn_cache.txt")
-non_cn_domain = load_cache_file("non_cn_cache.txt")
-
-
-def save_cache_file(domain: str, is_cn: bool):
+def update_cache(domain: str, is_cn: bool):
     """更新内存中的缓存"""
     if is_cn:
         cn_domain.add(domain)
     else:
         non_cn_domain.add(domain)
-
-
-def save_all_cache():
-    """程序结束时保存所有缓存到文件"""
-    try:
-        with open("cn_cache.txt", "w", encoding="utf-8") as f:
-            for domain in sorted(cn_domain):
-                f.write(domain + "\n")
-
-        with open("non_cn_cache.txt", "w", encoding="utf-8") as f:
-            for domain in sorted(non_cn_domain):
-                f.write(domain + "\n")
-
-        logger.info("缓存文件保存成功")
-    except Exception as e:
-        logger.error("保存缓存文件失败: %s", str(e))
 
 
 def load_domains():
@@ -144,38 +109,11 @@ session = None
 semaphore = None
 
 
-@asynccontextmanager
-async def get_session():
-    """获取全局session"""
-    global session
-    if session is None:
-        session = aiohttp.ClientSession()
-    try:
-        yield session
-    finally:
-        pass
-
-
-async def close_session():
-    """关闭全局session"""
-    global session
-    if session:
-        await session.close()
-        session = None
-
-
 async def is_china_domain(domain):
     """检查域名是否为中国域名"""
     # 确保 semaphore 已初始化
     if semaphore is None:
         raise RuntimeError("Semaphore 未初始化")
-
-    api_url = os.getenv("api_url")
-    if not api_url:
-        logger.error("API URL未设置，请在环境变量中设置api_url")
-        raise ValueError("API URL未设置，请在环境变量中设置api_url")
-
-    url = f"{api_url}/is-china-domain?domain={domain}"
 
     # 检查缓存
     if domain in cn_domain:
@@ -187,17 +125,13 @@ async def is_china_domain(domain):
 
     try:
         async with semaphore:  # 此时 semaphore 已确保不为 None
-            async with get_session() as session:
-                async with session.get(url) as resp:
-                    data = await resp.json()
-                    is_chinese = data.get("is_chinese_ip", False)
-                    logger.info(
-                        "域名检查: [%s] -> [%s]", "✅" if is_chinese else "❌", domain
-                    )
+            data = await check_domain(domain)
+            is_chinese = data.get("is_chinese_ip", False)
+            logger.info("域名检查: [%s] -> [%s]", "✅" if is_chinese else "❌", domain)
 
-                    # 更新缓存
-                    save_cache_file(domain, is_chinese)
-                    return is_chinese
+            # 更新缓存
+            update_cache(domain, is_chinese)
+            return is_chinese
 
     except Exception as e:
         logger.error("检查域名[%s]失败: %s", domain, str(e))
@@ -324,14 +258,10 @@ async def main():
         json.dump(data, f, ensure_ascii=False, indent=4)
     logger.info("域名处理完成，结果已保存到 final_domain_suffix.txt 和 rules.json")
 
-    # 在所有处理完成后保存缓存
-    save_all_cache()
-
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-        asyncio.run(close_session())  # 确保关闭session
         sort_rule_file()
         print("预加载阶段忽略的域名列表: ", skip_count)
     except Exception as e:  # pylint: disable=W0718
