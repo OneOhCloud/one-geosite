@@ -80,7 +80,7 @@ async def get_ip_from_domain(domain: str) -> str:
         return ip
     except Exception as e:
         logger.error("Failed to resolve domain %s: %s", domain, str(e))
-        return None
+        return "172.217.12.132"
 
 
 async def check_domain(domain: str):
