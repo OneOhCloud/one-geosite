@@ -179,6 +179,10 @@ async def check_domain_availability(url: str) -> bool:
                 if ip == "172.217.12.132":
                     continue
 
+                if not (await is_chinese_ip(ip)):
+                    logger.info("Domain %s is not a Chinese IP", domain)
+                    continue
+
                 # 检查端口
                 is_443_open = await is_port_open(ip, 443)
                 is_80_open = await is_port_open(ip, 80)
