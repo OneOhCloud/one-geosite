@@ -1,5 +1,8 @@
 # 提取主域名
+import asyncio
 import json
+
+from utils import check_domain_availability
 
 
 def get_main_domain(domain: str):
@@ -49,20 +52,37 @@ def remove_duplicates_from_list(domain_list: list[str]):
     return sorted(set(new_domain_list))
 
 
-def sort_rule_file():
-    """对规则文件进行排序"""
+async def sort_rule_file():
+    """对规则文件进行排序进行二次检查
+    检查主域名和www前缀的域名对应的ip是否可用
+    大型企业一般会维护主域名和www前缀的域名的80端口或443端口的可用性
+    """
     # pylint: disable=W0621
     with open("rules.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # 排序
     data["domain_suffix"] = sorted(set(data["domain_suffix"]))
-
     domain_suffix = data["domain_suffix"]
-
     domain_suffix = remove_duplicates_from_list(domain_suffix)
 
-    data["domain_suffix"] = domain_suffix
+    # 使用信号量限制并发数
+    semaphore = asyncio.Semaphore(10)  # 同时最多处理10个请求
+
+    async def check_with_semaphore(domain):
+        async with semaphore:
+            return await check_domain_availability(domain)
+
+    # 并发检查域名可用性
+    tasks = [check_with_semaphore(domain) for domain in domain_suffix]
+    results = await asyncio.gather(*tasks)
+
+    # 筛选可用的域名
+    new_domain_suffix = [
+        domain for domain, is_available in zip(domain_suffix, results) if is_available
+    ]
+
+    data["domain_suffix"] = new_domain_suffix
 
     # 保存规则
     with open("rules.json", "w", encoding="utf-8") as f:

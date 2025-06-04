@@ -258,8 +258,8 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
-        sort_rule_file()
+        # asyncio.run(main())
+        asyncio.run(sort_rule_file())
         print("预加载阶段忽略的域名列表: ", skip_count)
     except Exception as e:  # pylint: disable=W0718
         logger.exception("程序执行出错: %s", str(e))

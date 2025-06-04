@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import random
+import socket
 import time
 from pathlib import Path
 
@@ -76,10 +77,8 @@ async def get_ip_from_domain(domain: str) -> str:
         resolver.nameservers = [dns_server]
         result = await resolver.query(domain, "A")
         ip = result[0].host
-        logger.info("Domain %s resolved to IP: %s using %s", domain, ip, dns_server)
         return ip
     except Exception as e:
-        logger.error("Failed to resolve domain %s: %s", domain, str(e))
         return "172.217.12.132"
 
 
@@ -109,17 +108,20 @@ async def is_chinese_ip(ip: str) -> bool:
         return False
 
 
-# 判断 ip 443 和 80 其中一个是否能正常打开
 async def is_port_open(ip: str, port: int) -> bool:
-    """异步检查指定 IP 地址的端口是否开放"""
+    """异步检查指定 IP 地址和端口是否开放，使用原生 socket，默认超时 3 秒"""
+    loop = asyncio.get_event_loop()
     try:
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(
-                total=5, connect=3, sock_connect=3, sock_read=3
-            )
-        ) as session:
-            async with session.get(f"http://{ip}:{port}") as response:
-                return response.status == 200
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3.0)  # 设置 3 秒超时
+        # 使用 run_in_executor 在线程池中执行阻塞的 socket 操作
+        await loop.run_in_executor(None, sock.connect, (ip, port))
+        sock.close()
+        logger.info("Port %d on IP %s is open", port, ip)
+        return True
+    except (socket.timeout, socket.error) as e:
+        logger.info("Port %d on IP %s is closed: %s", port, ip, str(e))
+        return False
     except Exception as e:  # pylint: disable=broad-except
         logger.error("Error checking port %d on IP %s: %s", port, ip, str(e))
         return False
@@ -132,18 +134,6 @@ def _sync_is_chinese_ip(ip: str) -> bool:
             response = reader.country(ip)
             result = response.country.iso_code == "CN"
             logger.info("IP %s is %s China", ip, "from" if result else "not from")
-
-            if not result:
-                return False
-
-            _open_443 = is_port_open(ip, 443)
-            _open_80 = is_port_open(ip, 80)
-            if not _open_443 and not _open_80:
-                logger.info("IP %s has no open ports 443 or 80", ip)
-                return False
-            else:
-                logger.info("IP %s has open ports 443 or 80", ip)
-
             return result
 
     except (geoip2.errors.AddressNotFoundError, ValueError) as e:
@@ -151,4 +141,59 @@ def _sync_is_chinese_ip(ip: str) -> bool:
         return False
     except Exception as e:  # pylint: disable=broad-except
         logger.error("Error checking IP %s: %s", ip, str(e))
+        return False
+
+
+def get_main_domain(domain: str) -> str:
+    """
+    提取主域名
+    """
+
+    domain_parts = domain.split(".")
+    if len(domain_parts) > 2:
+        return ".".join(domain_parts[-2:])
+    return domain
+
+
+async def check_domain_availability(url: str) -> bool:
+    """
+    检查域名是否可用
+    Args:
+        url: 完整的URL或域名
+    Returns:
+        bool: 如果域名可访问则返回True，否则返回False
+    """
+    try:
+        # 提取主域名
+        main_domain = get_main_domain(url)
+        domains_to_check = [main_domain, f"www.{main_domain}"]
+
+        for domain in domains_to_check:
+            try:
+                # 解析域名
+                ip = await get_ip_from_domain(domain)
+                if not ip:
+                    logger.warning("Failed to resolve domain %s", domain)
+                    continue
+
+                if ip == "172.217.12.132":
+                    continue
+
+                # 检查端口
+                is_443_open = await is_port_open(ip, 443)
+                is_80_open = await is_port_open(ip, 80)
+
+                if is_443_open or is_80_open:
+                    logger.info("Domain %s is available", domain)
+                    return True
+
+            except Exception as e:
+                logger.error("Error checking domain %s: %s", domain, str(e))
+                continue
+
+        logger.info("No available domains found for %s", url)
+        return False
+
+    except Exception as e:
+        logger.error("Failed to process URL %s: %s", url, str(e))
         return False
