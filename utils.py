@@ -63,7 +63,7 @@ def needs_update():
     return flag
 
 
-dns_server_list = ["8.8.8.8"]
+dns_server_list = ["223.5.5.5", "114.114.114.114", "223.6.6.6", "119.29.29.29"]
 
 
 async def get_ip_from_domain(domain: str) -> str:
@@ -109,6 +109,22 @@ async def is_chinese_ip(ip: str) -> bool:
         return False
 
 
+# 判断 ip 443 和 80 其中一个是否能正常打开
+async def is_port_open(ip: str, port: int) -> bool:
+    """异步检查指定 IP 地址的端口是否开放"""
+    try:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(
+                total=5, connect=3, sock_connect=3, sock_read=3
+            )
+        ) as session:
+            async with session.get(f"http://{ip}:{port}") as response:
+                return response.status == 200
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error("Error checking port %d on IP %s: %s", port, ip, str(e))
+        return False
+
+
 def _sync_is_chinese_ip(ip: str) -> bool:
     """同步检查 IP 地址是否来自中国"""
     try:
@@ -116,7 +132,20 @@ def _sync_is_chinese_ip(ip: str) -> bool:
             response = reader.country(ip)
             result = response.country.iso_code == "CN"
             logger.info("IP %s is %s China", ip, "from" if result else "not from")
+
+            if not result:
+                return False
+
+            _open_443 = is_port_open(ip, 443)
+            _open_80 = is_port_open(ip, 80)
+            if not _open_443 and not _open_80:
+                logger.info("IP %s has no open ports 443 or 80", ip)
+                return False
+            else:
+                logger.info("IP %s has open ports 443 or 80", ip)
+
             return result
+
     except (geoip2.errors.AddressNotFoundError, ValueError) as e:
         logger.error("Failed to query IP %s: %s", ip, str(e))
         return False

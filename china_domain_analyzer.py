@@ -4,15 +4,12 @@ import asyncio
 import json
 import logging
 
-from dotenv import load_dotenv
-
 from helper import sort_rule_file
 from utils import check_domain
 
 # pylint: disable=c0103
 skip_count = 0
 
-load_dotenv()
 
 gTLD = [
     "cn",
