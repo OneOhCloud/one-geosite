@@ -77,8 +77,9 @@ async def get_ip_from_domain(domain: str) -> str:
         resolver.nameservers = [dns_server]
         result = await resolver.query(domain, "A")
         ip = result[0].host
-        return ip
+        return f"{ip}"
     except Exception as e:
+        logger.error("Error resolving domain %s: %s", domain, str(e))
         return "172.217.12.132"
 
 
@@ -97,13 +98,29 @@ async def is_chinese_ip(ip: str) -> bool:
     """异步检查 IP 地址是否来自中国"""
     if not DB_PATH.exists():
         logger.error("GeoLite2 database file does not exist")
-        return False
+        raise FileNotFoundError("GeoLite2 database file does not exist")
 
     try:
-        # 使用线程池执行同步的 geoip2 查询
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _sync_is_chinese_ip, ip)
-    except Exception as e:
+        with geoip2.database.Reader(DB_PATH) as reader:
+            response = reader.country(ip)
+            is_cn_res = response.country.iso_code == "CN"
+            logger.info("IP %s is %s China", ip, "from" if is_cn_res else "not from")
+            if not is_cn_res:
+                # 如果 IP 不在中国，则直接返回 False
+                return False
+
+            # 如果 IP 在中国，则检查端口 80 和 443 是否开放
+            is_80_open = await is_port_open(ip, 80)
+            is_443_open = await is_port_open(ip, 443)
+            if is_80_open or is_443_open:
+                logger.info("IP %s has open ports 80 or 443", ip)
+                return True
+            else:
+                # 如果端口 80 和 443 都不开放，则返回 False
+                logger.info("IP %s does not have open ports 80 or 443", ip)
+                return False
+
+    except Exception as e:  # pylint: disable=broad-except
         logger.error("Error checking IP %s: %s", ip, str(e))
         return False
 
@@ -124,23 +141,6 @@ async def is_port_open(ip: str, port: int) -> bool:
         return False
     except Exception as e:  # pylint: disable=broad-except
         logger.error("Error checking port %d on IP %s: %s", port, ip, str(e))
-        return False
-
-
-def _sync_is_chinese_ip(ip: str) -> bool:
-    """同步检查 IP 地址是否来自中国"""
-    try:
-        with geoip2.database.Reader(DB_PATH) as reader:
-            response = reader.country(ip)
-            result = response.country.iso_code == "CN"
-            logger.info("IP %s is %s China", ip, "from" if result else "not from")
-            return result
-
-    except (geoip2.errors.AddressNotFoundError, ValueError) as e:
-        logger.error("Failed to query IP %s: %s", ip, str(e))
-        return False
-    except Exception as e:  # pylint: disable=broad-except
-        logger.error("Error checking IP %s: %s", ip, str(e))
         return False
 
 
