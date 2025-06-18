@@ -3,9 +3,7 @@
 import asyncio
 import json
 import logging
-import time
 
-from helper import sort_rule_file
 from utils import check_domain
 
 # pylint: disable=c0103
@@ -206,8 +204,40 @@ async def process_domain(domain, index, total):
     result = None
     if is_cn:
         result = await get_china_domain_suffix(domain)
+
     logger.info("正在处理域名 [%d/%d]  [%s]", index, total, "✅" if is_cn else "❌")
+
     return result
+
+
+# 合并 rules/china.txt
+async def merge_local_china_rules():
+    """合并本地的中国域名规则"""
+
+    try:
+        with open("rules/china.txt", "r", encoding="utf-8") as f:
+            data = f.read().strip().split("\n")
+            if not data:
+                return []
+
+            # 过滤掉空行和注释行
+            data = [
+                line.strip()
+                for line in data
+                if line.strip() and not line.startswith("#")
+            ]
+
+            with open("rules.json", "r", encoding="utf-8") as f:
+                rules_data = json.load(f)
+            # 添加到 rules.json 中
+            rules_data["domain_suffix"] += data
+            rules_data["domain_suffix"] = sorted(set(rules_data["domain_suffix"]))
+            with open("rules.json", "w", encoding="utf-8") as f:
+                json.dump(rules_data, f, ensure_ascii=False, indent=4)
+            logger.info("成功合并 rules/china.txt 到 rules.json")
+
+    except Exception as e:  # pylint: disable=W0718
+        logger.error("读取 rules/china.txt 失败: %s", str(e))
 
 
 async def main():
@@ -259,9 +289,11 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
-        time.sleep(5)  # 等待日志输出完成
-        asyncio.run(sort_rule_file(False))
+        # asyncio.run(main())
+        # time.sleep(5)  # 等待日志输出完成
+        # asyncio.run(sort_rule_file(True))
         print("预加载阶段忽略的域名列表: ", skip_count)
     except Exception as e:  # pylint: disable=W0718
         logger.exception("程序执行出错: %s", str(e))
+
+    asyncio.run(merge_local_china_rules())

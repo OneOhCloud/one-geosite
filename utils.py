@@ -157,7 +157,7 @@ def get_main_domain(domain: str) -> str:
 
 async def check_domain_availability(url: str) -> bool:
     """
-    检查域名是否可用
+    检查主域名是否可用
     Args:
         url: 完整的URL或域名
     Returns:
