@@ -68,11 +68,16 @@ async def sort_rule_file(flag: bool = False):
 
     if flag:
         # 使用信号量限制并发数
-        semaphore = asyncio.Semaphore(50)  # 同时最多处理50个请求
+        semaphore = asyncio.Semaphore(150)  # 同时最多处理50个请求
 
         async def check_with_semaphore(domain):
             async with semaphore:
-                return await check_domain_availability(domain)
+                ok = await check_domain_availability(domain)
+                if not ok:
+                    # echo domain >> error_domain.txt
+                    with open("error_domain.txt", "a", encoding="utf-8") as f:
+                        f.write(get_main_domain(domain) + "\n")
+                return ok
 
         # 并发检查域名可用性
         tasks = [check_with_semaphore(domain) for domain in domain_suffix]

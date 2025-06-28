@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 
+from helper import sort_rule_file
 from utils import check_domain
 
 # pylint: disable=c0103
