@@ -125,11 +125,11 @@ async def is_chinese_ip(ip: str, domain: Optional[str] = None) -> bool:
             if domain:
                 http_available = await check_http_status(domain)
                 if http_available:
-                    logger.info("Domain %s returned HTTP 200", domain)
+                    logger.info("Domain %s returned HTTPS 200", domain)
                     return True
                 else:
-                    # 如果HTTP/HTTPS都不返回200，则返回 False
-                    logger.info("Domain %s does not return HTTP 200", domain)
+                    # 如果HTTPS不返回200，则返回 False
+                    logger.info("Domain %s does not return HTTPS 200", domain)
                     return False
             else:
                 # 如果没有提供域名，只能返回IP地理位置的结果
@@ -141,23 +141,21 @@ async def is_chinese_ip(ip: str, domain: Optional[str] = None) -> bool:
 
 
 async def check_http_status(domain: str) -> bool:
-    """异步检查域名的HTTP/HTTPS状态码，只要有一个返回200即认为可用"""
-    urls = [f"http://{domain}", f"https://{domain}"]
+    """异步检查域名的HTTPS状态码，返回200即认为可用"""
+    url = f"https://{domain}"
 
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-        for url in urls:
-            try:
-                async with session.get(url, allow_redirects=True) as response:
-                    if response.status == 200:
-                        logger.info("URL %s returned status 200", url)
-                        return True
-                    else:
-                        logger.info("URL %s returned status %d", url, response.status)
-            except Exception as e:
-                logger.info("Error checking URL %s: %s", url, str(e))
-                continue
+        try:
+            async with session.get(url, allow_redirects=False) as response:
+                if response.status == 200:
+                    logger.info("URL %s returned status 200", url)
+                    return True
+                else:
+                    logger.info("URL %s returned status %d", url, response.status)
+        except Exception as e:
+            logger.info("Error checking URL %s: %s", url, str(e))
 
-    logger.info("No successful HTTP/HTTPS connections for domain %s", domain)
+    logger.info("No successful HTTPS connections for domain %s", domain)
     return False
 
 
@@ -219,7 +217,7 @@ async def check_domain_availability(url: str) -> bool:
                     logger.info("Domain %s is not a Chinese IP", domain)
                     continue
 
-                # 检查HTTP状态码
+                # 检查HTTPS状态码
                 http_available = await check_http_status(domain)
 
                 if http_available:
