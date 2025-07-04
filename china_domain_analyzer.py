@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 
 from helper import sort_rule_file
 from utils import check_domain
@@ -101,7 +102,7 @@ def load_domains():
 
 
 # 添加全局变量
-MAX_CONCURRENCY = 20
+MAX_CONCURRENCY = 200
 session = None
 semaphore = None
 
@@ -292,7 +293,7 @@ if __name__ == "__main__":
     try:
         # asyncio.run(main())
         # time.sleep(5)  # 等待日志输出完成
-        # asyncio.run(sort_rule_file(True))
+        asyncio.run(sort_rule_file(True))
         print("预加载阶段忽略的域名列表: ", skip_count)
     except Exception as e:  # pylint: disable=W0718
         logger.exception("程序执行出错: %s", str(e))

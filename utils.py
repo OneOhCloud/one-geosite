@@ -7,6 +7,7 @@ import random
 import socket
 import time
 from pathlib import Path
+from typing import Optional
 
 import aiodns
 import aiohttp
@@ -64,7 +65,15 @@ def needs_update():
     return flag
 
 
-dns_server_list = ["223.5.5.5", "114.114.114.114", "223.6.6.6", "119.29.29.29"]
+dns_server_list = [
+    "223.6.6.6",
+    "223.5.5.5",
+    "114.114.114.114",
+    "223.6.6.6",
+    "119.29.29.29",
+    "119.28.28.28",
+    "180.184.1.1",
+]
 
 
 async def get_ip_from_domain(domain: str) -> str:
@@ -80,6 +89,9 @@ async def get_ip_from_domain(domain: str) -> str:
         return f"{ip}"
     except Exception as e:
         logger.error("Error resolving domain %s: %s", domain, str(e))
+        os.system(
+            f"echo 'Error resolving domain {domain}: {str(e)}:{dns_server}' >> error.log"
+        )
         return "172.217.12.132"
 
 
@@ -90,11 +102,11 @@ async def check_domain(domain: str):
     if not ip:
         return {"domain": domain, "ip": ip, "is_chinese_ip": False}
 
-    is_chinese = await is_chinese_ip(ip)
+    is_chinese = await is_chinese_ip(ip, domain)
     return {"domain": domain, "ip": ip, "is_chinese_ip": is_chinese}
 
 
-async def is_chinese_ip(ip: str) -> bool:
+async def is_chinese_ip(ip: str, domain: Optional[str] = None) -> bool:
     """异步检查 IP 地址是否来自中国"""
     if not DB_PATH.exists():
         logger.error("GeoLite2 database file does not exist")
@@ -109,20 +121,44 @@ async def is_chinese_ip(ip: str) -> bool:
                 # 如果 IP 不在中国，则直接返回 False
                 return False
 
-            # 如果 IP 在中国，则检查端口 80 和 443 是否开放
-            is_80_open = await is_port_open(ip, 80)
-            is_443_open = await is_port_open(ip, 443)
-            if is_80_open or is_443_open:
-                logger.info("IP %s has open ports 80 or 443", ip)
-                return True
+            # 如果 IP 在中国，则检查域名的HTTP状态码
+            if domain:
+                http_available = await check_http_status(domain)
+                if http_available:
+                    logger.info("Domain %s returned HTTP 200", domain)
+                    return True
+                else:
+                    # 如果HTTP/HTTPS都不返回200，则返回 False
+                    logger.info("Domain %s does not return HTTP 200", domain)
+                    return False
             else:
-                # 如果端口 80 和 443 都不开放，则返回 False
-                logger.info("IP %s does not have open ports 80 or 443", ip)
-                return False
+                # 如果没有提供域名，只能返回IP地理位置的结果
+                return True
 
     except Exception as e:  # pylint: disable=broad-except
         logger.error("Error checking IP %s: %s", ip, str(e))
         return False
+
+
+async def check_http_status(domain: str) -> bool:
+    """异步检查域名的HTTP/HTTPS状态码，只要有一个返回200即认为可用"""
+    urls = [f"http://{domain}", f"https://{domain}"]
+
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+        for url in urls:
+            try:
+                async with session.get(url, allow_redirects=True) as response:
+                    if response.status == 200:
+                        logger.info("URL %s returned status 200", url)
+                        return True
+                    else:
+                        logger.info("URL %s returned status %d", url, response.status)
+            except Exception as e:
+                logger.info("Error checking URL %s: %s", url, str(e))
+                continue
+
+    logger.info("No successful HTTP/HTTPS connections for domain %s", domain)
+    return False
 
 
 async def is_port_open(ip: str, port: int) -> bool:
@@ -179,15 +215,14 @@ async def check_domain_availability(url: str) -> bool:
                 if ip == "172.217.12.132":
                     continue
 
-                if not (await is_chinese_ip(ip)):
+                if not (await is_chinese_ip(ip, domain)):
                     logger.info("Domain %s is not a Chinese IP", domain)
                     continue
 
-                # 检查端口
-                is_443_open = await is_port_open(ip, 443)
-                is_80_open = await is_port_open(ip, 80)
+                # 检查HTTP状态码
+                http_available = await check_http_status(domain)
 
-                if is_443_open or is_80_open:
+                if http_available:
                     logger.info("Domain %s is available", domain)
                     return True
 
