@@ -146,7 +146,7 @@ async def check_http_status(domain: str) -> bool:
 
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
         try:
-            async with session.get(url, allow_redirects=False) as response:
+            async with session.get(url) as response:
                 if response.status == 200:
                     logger.info("URL %s returned status 200", url)
                     return True
