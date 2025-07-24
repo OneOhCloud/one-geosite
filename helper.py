@@ -68,7 +68,7 @@ async def sort_rule_file(flag: bool = False):
 
     if flag:
         # 使用信号量限制并发数
-        semaphore = asyncio.Semaphore(150)  # 同时最多处理50个请求
+        semaphore = asyncio.Semaphore(25)  # 同时最多处理50个请求
 
         async def check_with_semaphore(domain):
             async with semaphore:
