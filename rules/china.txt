@@ -30,7 +30,9 @@ bwfapiao.com
 campushoy.com
 cdnet110.com
 cfryst.com
+chinapopin.com
 cloudses.com
+didiglobal.com
 doupay.com
 exands.com
 feedcoopapi.com
@@ -39,6 +41,8 @@ hzshudian.com
 iguopin.com
 iotwish.com
 jiangongdata.com
+kashijiehaoka.cn
+linkedin.com
 pgyapi.com
 plxao.com
 ppkao.com
@@ -55,6 +59,7 @@ sonkwo.com
 tencentscf.com
 trip.com
 txrjy.com
+vive.com
 wodeshike.net
 wuxipark.com
 wxamedia.com
