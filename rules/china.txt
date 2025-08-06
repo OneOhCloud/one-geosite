@@ -1,5 +1,6 @@
 1212.com
 12355.net
+16fan.com
 17173cdn.com
 17track.net
 189smarthome.com
@@ -12,6 +13,7 @@
 3gppnetwork.org
 3wft.com
 4i7tc.com
+51ifonts.com
 51jobapp.com
 51tracking.com
 588ku.com
@@ -26,6 +28,7 @@ aliyunddos1021.com
 aliyunpds.com
 aliziku.com
 apple-mapkit.com
+blued.com
 bwfapiao.com
 campushoy.com
 cdnet110.com
@@ -38,6 +41,7 @@ exands.com
 feedcoopapi.com
 furpipi.net
 hzshudian.com
+ifonts.com
 iguopin.com
 iotwish.com
 jiangongdata.com
@@ -60,9 +64,16 @@ tencentscf.com
 trip.com
 txrjy.com
 vive.com
+vive.com
 wodeshike.net
 wuxipark.com
 wxamedia.com
 xiaoaiassist.com
 ymmiyun.com
 yundunwaf5.com
+book118.com
+cmhk.com
+finezb.com
+51fubei.com
+hznetwk.com
+huoli.com
