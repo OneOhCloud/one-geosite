@@ -144,7 +144,8 @@ async def check_http_status(domain: str) -> bool:
     """异步检查域名的HTTPS状态码，返回200即认为可用"""
     url = f"https://{domain}"
 
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+    # 如果 2 秒内都无法连接，可以认为此网站的提供者没有服务用户的诚意。
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
         try:
             async with session.get(url) as response:
                 if response.status == 200:
@@ -157,25 +158,6 @@ async def check_http_status(domain: str) -> bool:
 
     logger.info("No successful HTTPS connections for domain %s", domain)
     return False
-
-
-async def is_port_open(ip: str, port: int) -> bool:
-    """异步检查指定 IP 地址和端口是否开放，使用原生 socket，默认超时 3 秒"""
-    loop = asyncio.get_event_loop()
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3.0)  # 设置 3 秒超时
-        # 使用 run_in_executor 在线程池中执行阻塞的 socket 操作
-        await loop.run_in_executor(None, sock.connect, (ip, port))
-        sock.close()
-        logger.info("Port %d on IP %s is open", port, ip)
-        return True
-    except (socket.timeout, socket.error) as e:
-        logger.info("Port %d on IP %s is closed: %s", port, ip, str(e))
-        return False
-    except Exception as e:  # pylint: disable=broad-except
-        logger.error("Error checking port %d on IP %s: %s", port, ip, str(e))
-        return False
 
 
 def get_main_domain(domain: str) -> str:
