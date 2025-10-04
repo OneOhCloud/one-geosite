@@ -1,10 +1,8 @@
 """Utility functions for IP address handling and GeoLite2 database management."""
 
-import asyncio
 import logging
 import os
 import random
-import socket
 import time
 from pathlib import Path
 from typing import Optional
@@ -71,8 +69,6 @@ dns_server_list = [
     "114.114.114.114",
     "223.6.6.6",
     "119.29.29.29",
-    "119.28.28.28",
-    "180.184.1.1",
 ]
 
 
@@ -88,7 +84,12 @@ async def get_ip_from_domain(domain: str) -> str:
         ip = result[0].host
         return f"{ip}"
     except Exception as e:
-        logger.error("Error resolving domain %s: %s", domain, str(e))
+        logger.error(
+            "Error resolving domain %s: %s from dns server: %s",
+            domain,
+            str(e),
+            dns_server,
+        )
         os.system(
             f"echo 'Error resolving domain {domain}: {str(e)}:{dns_server}' >> error.log"
         )
