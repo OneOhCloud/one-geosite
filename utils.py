@@ -63,13 +63,7 @@ def needs_update():
     return flag
 
 
-dns_server_list = [
-    "223.6.6.6",
-    "223.5.5.5",
-    "114.114.114.114",
-    "223.6.6.6",
-    "119.29.29.29",
-]
+dns_server_list = ["8.8.8.8", "1.1.1.1"]
 
 
 async def get_ip_from_domain(domain: str) -> str:
