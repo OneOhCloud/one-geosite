@@ -10,6 +10,7 @@ from typing import Optional
 import aiodns
 import aiohttp
 import geoip2.database
+from urllib3 import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ def needs_update():
     return flag
 
 
-dns_server_list = ["8.8.8.8", "1.1.1.1"]
+dns_server_list = ["223.5.5.5", "119.29.29.29"]
 
 
 async def get_ip_from_domain(domain: str) -> str:
@@ -136,7 +137,7 @@ async def is_chinese_ip(ip: str, domain: Optional[str] = None) -> bool:
 
 
 async def check_http_status(domain: str) -> bool:
-    """异步检查域名的HTTPS状态码，返回200即认为可用"""
+    """异步检查域名的HTTPS状态码，返回200,或重定向到200则返回True"""
     url = f"https://{domain}"
 
     # 如果 2 秒内都无法连接，可以认为此网站的提供者没有服务用户的诚意。
@@ -146,6 +147,25 @@ async def check_http_status(domain: str) -> bool:
                 if response.status == 200:
                     logger.info("URL %s returned status 200", url)
                     return True
+                elif response.status in {301, 302, 303, 307, 308}:
+                    logger.info(
+                        "URL %s returned redirect status %d", url, response.status
+                    )
+                    # 跟随重定向检查最终状态码
+                    final_url = str(response.url)
+                    async with session.get(final_url) as final_response:
+                        if final_response.status == 200:
+                            logger.info(
+                                "Final URL %s after redirect returned status 200",
+                                final_url,
+                            )
+                            return True
+                        else:
+                            logger.info(
+                                "Final URL %s after redirect returned status %d",
+                                final_url,
+                                final_response.status,
+                            )
                 else:
                     logger.info("URL %s returned status %d", url, response.status)
         except Exception as e:
