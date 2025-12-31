@@ -139,12 +139,13 @@ async def is_chinese_ip(ip: str, domain: Optional[str] = None) -> bool:
 async def check_http_status(domain: str) -> bool:
     """异步检查域名的HTTPS状态码，返回200,或重定向到200则返回True"""
     url = f"https://{domain}"
+    success_statuses = [200, 403, 404]
 
     # 如果 2 秒内都无法连接，可以认为此网站的提供者没有服务用户的诚意。
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
         try:
             async with session.get(url) as response:
-                if response.status == 200:
+                if response.status in success_statuses:
                     logger.info("URL %s returned status 200", url)
                     return True
                 elif response.status in {301, 302, 303, 307, 308}:
@@ -154,7 +155,7 @@ async def check_http_status(domain: str) -> bool:
                     # 跟随重定向检查最终状态码
                     final_url = str(response.url)
                     async with session.get(final_url) as final_response:
-                        if final_response.status == 200:
+                        if final_response.status in success_statuses:
                             logger.info(
                                 "Final URL %s after redirect returned status 200",
                                 final_url,
