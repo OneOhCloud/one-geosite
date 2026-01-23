@@ -1,16 +1,16 @@
 """优化后的Python脚本 - 改进日志输出以清晰展示逻辑关系"""
 
+import asyncio
 import json
 import logging
-import os
+import time
 
-import requests
-from dotenv import load_dotenv
+from helper import sort_rule_file
+from utils import check_domain
 
 # pylint: disable=c0103
 skip_count = 0
 
-load_dotenv()
 
 gTLD = [
     "cn",
@@ -42,47 +42,21 @@ with open("rules.json", "r", encoding="utf-8") as f:
     ignore_domain_suffix_list += rules_data["domain_suffix"]
 
 
-def load_cache_file(cache_file: str):
-    """加载缓存文件"""
-    if not os.path.exists(cache_file):
-        logger.warning("缓存文件[%s]不存在", cache_file)
-        return set()
-
-    try:
-        # pylint: disable=W0621
-        with open(cache_file, "r", encoding="utf-8") as f:
-            domains = {line.strip().lower() for line in f if line.strip()}
-        logger.info("加载缓存文件[%s]成功", cache_file)
-        return set(domains)
-    except Exception as e:  # pylint: disable=W0718
-        logger.error("加载缓存文件[%s]失败: %s", cache_file, str(e))
-        return set()
+cn_domain = set()
+non_cn_domain = set()
 
 
-cn_domain = load_cache_file("cn_cache.txt")
-non_cn_domain = load_cache_file("non_cn_cache.txt")
-
-
-def save_cache_file(domain: str, is_cn: bool):
-    """保存缓存文件"""
-    # 保存到 cn 缓存文件和非 cn 缓存文件
+def update_cache(domain: str, is_cn: bool):
+    """更新内存中的缓存"""
     if is_cn:
-        cache_file = "cn_cache.txt"
         cn_domain.add(domain)
     else:
-        cache_file = "non_cn_cache.txt"
         non_cn_domain.add(domain)
-    try:
-        # pylint: disable=W0621
-        with open(cache_file, "a", encoding="utf-8") as f:
-            f.write(domain + "\n")
-
-    except Exception as e:  # pylint: disable=W0718
-        logger.error("保存域名[%s]到缓存文件[%s]失败: %s", domain, cache_file, str(e))
 
 
 def load_domains():
     """读取未处理的域名列表"""
+    # pylint: disable=W0603
     global skip_count
     _data = []
 
@@ -127,43 +101,42 @@ def load_domains():
         return []
 
 
-def is_china_domain(domain):
-    """检查域名是否为中国域名"""
-    api_url = os.getenv("api_url")
-    if not api_url:
-        logger.error("API URL未设置，请在环境变量中设置api_url")
-        raise ValueError("API URL未设置，请在环境变量中设置api_url")
+# 添加全局变量
+MAX_CONCURRENCY = 200
+session = None
+semaphore = None
 
-    url = f"{os.getenv("api_url")}/is-china-domain?domain={domain}"
+
+async def is_china_domain(domain):
+    """检查域名是否为中国域名"""
+    # 确保 semaphore 已初始化
+    if semaphore is None:
+        raise RuntimeError("Semaphore 未初始化")
 
     # 检查缓存
     if domain in cn_domain:
         logger.info("域名检查: [%s] -> [%s]", "✅", domain)
-
         return True
     if domain in non_cn_domain:
         logger.info("域名检查: [%s] -> [%s]", "❌", domain)
         return False
 
     try:
-        response = requests.get(url, timeout=30)
-        data = response.json()
-        is_chinese = data.get("is_chinese_ip", False)
-        # logger.info("域名检查: [%s] -> %s", domain, "is cn" if is_chinese else "!! cn")
-        logger.info("域名检查: [%s] -> [%s]", "✅" if is_chinese else "❌", domain)
-        if is_chinese:
-            save_cache_file(domain, True)
-        else:
-            save_cache_file(domain, False)
-        return is_chinese
-    except Exception as e:  # pylint: disable=W0718
-        logger.error("检查域名[%s]失败: %s", domain, str(e))
-        # 如果请求失败，默认返回 False
+        async with semaphore:  # 此时 semaphore 已确保不为 None
+            data = await check_domain(domain)
+            is_chinese = data.get("is_chinese_ip", False)
+            logger.info("域名检查: [%s] -> [%s]", "✅" if is_chinese else "❌", domain)
 
+            # 更新缓存
+            update_cache(domain, is_chinese)
+            return is_chinese
+
+    except Exception as e:
+        logger.error("检查域名[%s]失败: %s", domain, str(e))
         return False
 
 
-def get_china_domain_suffix(domain):
+async def get_china_domain_suffix(domain):
     """获取中国域名的后缀"""
 
     finally_domain = domain
@@ -182,7 +155,7 @@ def get_china_domain_suffix(domain):
 
         checked_domains.add(sub_domain)
 
-        if is_china_domain(sub_domain):
+        if await is_china_domain(sub_domain):
             finally_domain = sub_domain
         else:
             break
@@ -192,7 +165,7 @@ def get_china_domain_suffix(domain):
     return finally_domain
 
 
-def get_domain_list(domain_list: list[str]):
+def get_domain_list(domain_list: set[str]):
     """获取域名列表"""
     domain_suffix = set()
     for domain in domain_list:
@@ -227,61 +200,70 @@ def get_domain_list(domain_list: list[str]):
     return data
 
 
-def sort_rule_file():
-    """对规则文件进行排序"""
-    # pylint: disable=W0621
-    with open("rules.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
+async def process_domain(domain, index, total):
+    """处理单个域名"""
+    is_cn = await is_china_domain(domain)
+    result = None
+    if is_cn:
+        result = await get_china_domain_suffix(domain)
 
-    # 排序
-    data["domain_suffix"] = sorted(set(data["domain_suffix"]))
+    logger.info("正在处理域名 [%d/%d]  [%s]", index, total, "✅" if is_cn else "❌")
 
-    # 保存规则
-    with open("rules.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    return result
 
 
-def remove_duplicates():
-    """去重"""
-    # 加载官方规则
-    with open("./tmp/geosite-cn.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-    sing_box_rules = data["rules"][0]["domain_suffix"]
+# 合并 rules/china.txt
+async def merge_local_china_rules():
+    """合并本地的中国域名规则"""
 
-    # 加载自定义规则
-    with open("rules.json", "r", encoding="utf-8") as f:
-        custom_rules = json.load(f)
-    domain_suffix = custom_rules["domain_suffix"]
+    try:
+        with open("rules/china.txt", "r", encoding="utf-8") as f:
+            data = f.read().strip().split("\n")
+            if not data:
+                return []
 
-    finally_domain_list = set()
+            # 过滤掉空行和注释行
+            data = [
+                line.strip()
+                for line in data
+                if line.strip() and not line.startswith("#")
+            ]
 
-    for rule in domain_suffix:
-        if any(rule.endswith(suffix) for suffix in sing_box_rules):
-            logger.info("规则[%s]已存在，跳过", rule)
-            continue
-        finally_domain_list.add(rule)
+            with open("rules.json", "r", encoding="utf-8") as f:
+                rules_data = json.load(f)
+            # 添加到 rules.json 中
+            rules_data["domain_suffix"] += data
+            rules_data["domain_suffix"] = sorted(set(rules_data["domain_suffix"]))
+            with open("rules.json", "w", encoding="utf-8") as f:
+                json.dump(rules_data, f, ensure_ascii=False, indent=4)
+            logger.info("成功合并 rules/china.txt 到 rules.json")
 
-    custom_rules["domain_suffix"] = sorted(set(finally_domain_list))
-    # 保存规则
-    with open("rules.json", "w", encoding="utf-8") as f:
-        json.dump(custom_rules, f, ensure_ascii=False, indent=4)
+    except Exception as e:  # pylint: disable=W0718
+        logger.error("读取 rules/china.txt 失败: %s", str(e))
 
 
-def main():
+async def main():
     """主函数"""
+    global semaphore
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
     domain_list = load_domains()
     if not domain_list:
         logger.info("没有需要处理的域名")
         return
+
     logger.info("开始处理域名列表")
-    finally_domain_list = set()
     total_domains = len(domain_list)
-    for index, domain in enumerate(domain_list, start=1):
-        logger.info("正在处理域名 [%d/%d]", index, total_domains)
-        if is_china_domain(domain):
-            # 获取中国域名后缀
-            china_domain_suffix = get_china_domain_suffix(domain)
-            finally_domain_list.add(china_domain_suffix)
+
+    # 并发处理域名
+    tasks = [
+        process_domain(domain, i + 1, total_domains)
+        for i, domain in enumerate(domain_list)
+    ]
+    results = await asyncio.gather(*tasks)
+
+    # 过滤掉None结果
+    finally_domain_list = set(filter(None, results))
 
     # 将最终的域名后缀保存到文件
     # pylint: disable=W0621
@@ -300,12 +282,7 @@ def main():
 
     # 排序
     data["domain_suffix"] = sorted(set(data["domain_suffix"]))
-    # 去掉以 cn 结尾的域名后缀，处理字符长度大于3的域名后缀
-    data["domain_suffix"] = [
-        suffix
-        for suffix in data["domain_suffix"]
-        if not (suffix.endswith("cn") and len(suffix) > 3)
-    ]
+
     # 保存规则
     with open("rules.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
@@ -314,7 +291,11 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        asyncio.run(main())
+        time.sleep(5)  # 等待日志输出完成
+        asyncio.run(sort_rule_file(True))
         print("预加载阶段忽略的域名列表: ", skip_count)
     except Exception as e:  # pylint: disable=W0718
         logger.exception("程序执行出错: %s", str(e))
+
+    asyncio.run(merge_local_china_rules())

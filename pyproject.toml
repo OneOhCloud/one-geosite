@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "asyncssh>=2.21.0",
+    "geoip2>=5.1.0",
     "pylint>=3.3.7",
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
